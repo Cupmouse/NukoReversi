@@ -31,6 +31,25 @@ contract Reversi {
         _;
     }
 
+    // function fancyBoard() public constant returns (string) {
+    //     string memory rst= "";
+
+    //     for (uint x = 0; x < 8; x++) {
+    //         for (uint y = 0; y < 8; y++) {
+    //             uint piece = getPiece(x, y);
+
+    //             if (piece == 0) {
+    //                 rst += " ";
+    //             } else if (piece == 1) {
+    //                 rst += "●";
+    //             } else {
+    //                 rst += "○";
+    //             }
+    //         }
+    //         rst += "\n";
+    //     }
+    // }
+
     /*
         Join a game as a player1 if there were no player joined, as player2 if a player1 has already joined.
     */
@@ -45,92 +64,76 @@ contract Reversi {
         }
     }
 
+    function passTurn() public playerInTurn {
+        // Checks for a place to place a piece, if there are, you cannot pass.
+
+        turn++;
+        turnOf = (turnOf + 1) % 2;
+    }
+
+    function giveUpGame() public playerInTurn {
+        // TODO to the owner
+        selfdestruct(players[0]);
+    }
+
     /*
-      Place a piece of the player in turn.
+      Place a piece of the player in turn. This also do flipping thing.
     */
     function placePiece(uint x, uint y) playerInTurn {
-        setPiece(x, y, turnOf);
+        // It first set a piece of the player to where he/she wanted to place
+        setPiece(x, y, turnOf + 1);
 
         // Start flipping pieces
-        uint i;
+        uint totalFlipping = 0;
 
-        // Flipping +X direction
-        for (i = x + 1; i < 8; i++) {
-            if (board[i][y] == turnOf + 1) {
-                // Same colored piece, flipping over
-                break;
-            } else {
-                // Opponent's piece, flip it
-                setPiece(i, y, (turnOf + 1) % 2 + 1);
-            }
-        }
+        // Flipping X direction
+        totalFlipping += flipLine( x + 1 , y     ,  1,  0, turnOf );
+        totalFlipping += flipLine( x - 1 , y     , -1,  0, turnOf );
+        // Flipping Y direction
+        totalFlipping += flipLine( x     , y + 1 ,  0,  1, turnOf );
+        totalFlipping += flipLine( x     , y - 1 ,  0, -1, turnOf );
+        // Flipping diagonal direction
+        totalFlipping += flipLine( x + 1 , y + 1 ,  1,  1, turnOf );
+        totalFlipping += flipLine( x + 1 , y - 1 ,  1, -1, turnOf );
+        totalFlipping += flipLine( x - 1 , y - 1 , -1, -1, turnOf );
+        totalFlipping += flipLine( x - 1 , y + 1 , -1,  1, turnOf );
 
-        // Flipping -X direction
-        for (i = x - 1; i >= 0; i--) {
-            if (board[i][y] == turnOf + 1) {break;}
-            else {setPiece(i, y, (turnOf + 1) % 2 + 1);}
-        }
+        if (totalFlipping == 0) {
+            // Nothing to flip means you cannot place a piece there,
+            // if there is nowhere to place then use passTurn() instead.
 
-        // Flipping +Y direction
-        for (i = y + 1; i < 8; i++) {
-            if (board[x][i] == turnOf + 1) {break;}
-            else {setPiece(x, i, (turnOf + 1) % 2 + 1);}
-        }
-
-        // Flipping -Y direction
-        for (i = y - 1; i >= 0; i--) {
-            if (board[x][i] == turnOf + 1) {break;}
-            else {setPiece(x, i, (turnOf + 1) % 2 + 1);}
-        }
-
-        uint j;
-        // Flipping +X+Y direction
-        for (i = x + 1; i < 8; i++) {
-            for (j = y + 1; j < 8; j++) {
-                if (board[i][j] == turnOf + 1) {break;}
-                else {setPiece(i, j, (turnOf + 1) % 2 + 1);}
-            }
-        }
-
-        // Flipping +X-Y direction
-        for (i = x + 1; i < 8; i++) {
-            for (j = y - 1; j < 8; j--) {
-                if (board[i][j] == turnOf + 1) {break;}
-                else {setPiece(i, j, (turnOf + 1) % 2 + 1);}
-            }
-        }
-
-        // Flipping -X-Y direction
-        for (i = x - 1; i < 8; i--) {
-            for (j = y - 1; j < 8; j--) {
-                if (board[i][j] == turnOf + 1) {break;}
-                else {setPiece(i, j, (turnOf + 1) % 2 + 1);}
-            }
-        }
-
-        // Flipping -X+Y direction
-        for (i = x - 1; i < 8; i--) {
-            for (j = y + 1; j < 8; j++) {
-                if (board[i][j] == turnOf + 1) {break;}
-                else {setPiece(i, j, (turnOf + 1) % 2 + 1);}
-            }
+            revert();   // Yes sure it wrote down some changes in the memory,
+            // but since it have not overwrited the nuko blockchain,
+            // revert() prevents from writing a broken board state
+            // to the blockchain.
+            // PS. I added some thing and a writing problem has gone
+            // entirely.
         }
 
         // End flipping pieces
+
+        // Let it proceed to next turn
+        turn++;
+        turnOf = (turnOf + 1) % 2; // If now player1 is placed a piece then next turns player would be player2, otherwise player1
+
     }
 
     /*
         Flip pieces as flipper, the direction is (ax, ay) ex. (1, 0) is +X, (1, 1) is +X+Y, (-1, 1) is -X+Y
         returns int value which shows how many times pieces are flipped with the function call
      */
-    private int flipLine(int sx, int sy, int ax, int ay, int flipper) {
-        int flipCount = 0;
+    function flipLine(uint sx, uint sy, int ax, int ay, uint flipper) internal returns (uint) {
+        uint x = 0;
+        uint y = 0;
+        uint i = 0;
+        uint piece = 0;
+        uint flipCount = 0;
 
         if (ay == 0) {
             // Flip horizontally
             // Pre determining how far away it should flip in line
-            for (int x = sx; (0 <= x && x < 8); x+=ax) {
-                int piece = getPiece(x, sy);
+            for (x = sx; (0 <= x && x < 8); x = uint(int(x) + ax)) {
+                piece = getPiece(x, sy);
 
                 if (piece == 0) {
                     // Nothing more is there, no flipping would happen
@@ -145,15 +148,15 @@ contract Reversi {
             }
 
             // Flipping pieces real this time
-            for (int i = 0; i < flipCount; i++) {
-            // Flip it
-                setPiece(board, sx + ax * i, sy, flipper + 1);
+            for (i = 0; i < flipCount; i++) {
+                // Flip it
+                setPiece(uint(int(sx) + ax * int(i)), sy, flipper + 1);
             }
         } else if (ax == 0) {
             // Flip vertically, process is same with the above
 
-            for (int y = sy; (0 <= y && y < 8); y+=ay) {
-                int piece = getPiece(sx, y);
+            for (y = sy; (0 <= y && y < 8); y = uint(int(y) + ay)) {
+                piece = getPiece(sx, uint(y));
 
                 if (piece == 0) {
                     return 0;
@@ -164,16 +167,18 @@ contract Reversi {
                 }
             }
 
-            for (int i = 0; i < flipCount; i++) {
-                setPiece(board, sx, sy + ay * i, flipper + 1);
+            for (i = 0; i < flipCount; i++) {
+                setPiece(sx, uint(int(sy) + ay * int(i)), flipper + 1);
             }
         } else {
             // Flip diagonally
 
-            int x = sx, y = sy;
+            x = sx;
+            y = sy;
 
             while ((0 <= x && x < 8) && (0 <= y && y < 8)) {
-                int piece = getPiece(board, x, y);
+                piece = getPiece(x, y);
+
                 if (piece == 0) {
                     return 0;
                 } else if (piece == flipper + 1) {
@@ -182,31 +187,25 @@ contract Reversi {
                     flipCount++;
                 }
 
-                x += ax;
-                y += ay;
+                x = uint(int(x) + ax);
+                y = uint(int(y) + ay);
             }
 
-            for (int i = 0; i < flipCount; i++) {
-                setPiece(board, sx + ax * i, sy + ay * i, flipper + 1);
+            for (i = 0; i < flipCount; i++) {
+                setPiece(uint(int(sx) + ax * int(i)), uint(int(sy) + ay * int(i)), flipper + 1);
             }
         }
+
         return flipCount;
+    }
+
+    function getPiece(uint x, uint y) internal constant returns (uint) {
+        require(x < 8 && y < 8);
+        return board[x][y];
     }
 
     function setPiece(uint x, uint y, uint c) internal {
         require(x < 8 && y < 8);    // Checks if x and y are in bound (board size is 8 * 8)
         board[x][y] = c;
-    }
-
-    function passTurn() public playerInTurn {
-        // Checks for a place to place a piece, if there are, you cannot pass.
-
-        turn++;
-        turnOf = (turnOf + 1) % 2;
-    }
-
-    function giveUpGame() public playerInTurn {
-        // TODO to the owner
-        selfdestruct(players[0]);
     }
 }
