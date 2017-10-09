@@ -2,26 +2,35 @@ pragma solidity ^0.4.15;
 
 contract Reversi {
 
-    // Turn no including pass
+    // Turn number including pass
     uint public turn;
     // 0 == player1 1 == player2
     uint public turnOf;
     // players[0] is player1's address, players[1] is player2's address
     address[2] public players;
-    // The array contains all pieces on board. (0, 0) is bottom left
+    // This uint256 variable has all pieces on the board. (0, 0) is at 0 bit and value is 2 bit length
     // 0 == empty, 1 == player1's piece, 2 == player2's piece
-    // Usually player1's piece color is dark, and player2's, white.
-    uint[8][8] public board;
+    // Normally, storing position = 2 * ((8 * y) + x) [bit]
+    // Usually player1's piece color is dark, and player2's white.
+    uint256 public board;
 
-    function Reversi() {
+    function Reversi() public {
         turn = 0;
         turnOf = 0;
 
         // Set initial pieces
-        board[3][3] = 1;
-        board[3][4] = 0;
-        board[4][3] = 1;
-        board[4][4] = 0;
+        /*
+         0000000000000000
+         0000000000000000
+         0000000000000000
+         0000001001000000
+         0000000110000000 ^
+         0000000000000000 |y
+         0000000000000000
+         0000000000000000
+                 <- x
+        */
+        board = 0x2400180000000000000;
     }
 
     // Modifier that checks whether msg.sender is the player in turn
@@ -53,7 +62,10 @@ contract Reversi {
     /*
         Join a game as a player1 if there were no player joined, as player2 if a player1 has already joined.
     */
-    function joinGame() {
+    function joinGame() public {
+        // Reject if the msg.sender is already the player of the game
+        if (players[0] == msg.sender || players[1] == msg.sender) revert();
+
         if (players[0] == 0x0) {
             players[0] = msg.sender;
         } else if (players[1] == 0x0) {
@@ -65,7 +77,7 @@ contract Reversi {
     }
 
     function passTurn() public playerInTurn {
-        // Checks for a place to place a piece, if there are, you cannot pass.
+        // TODO Checks for a place to place a piece, if there are, you cannot pass.
 
         turn++;
         turnOf = (turnOf + 1) % 2;
@@ -79,7 +91,8 @@ contract Reversi {
     /*
       Place a piece of the player in turn. This also do flipping thing.
     */
-    function placePiece(uint x, uint y) playerInTurn {
+    function placePiece(uint x, uint y) public playerInTurn {
+        require(getPiece(x, y) == 0);   // The place has to be empty
         // It first set a piece of the player to where he/she wanted to place
         setPiece(x, y, turnOf + 1);
 
@@ -201,11 +214,18 @@ contract Reversi {
 
     function getPiece(uint x, uint y) internal constant returns (uint) {
         require(x < 8 && y < 8);
-        return board[x][y];
+        // Shift right to get the value at index being the first digit, and erase all bits upper 3 bit (do AND 0b11)
+        return (board >> (2 * ((8 * y) + x))) & 3;
     }
 
     function setPiece(uint x, uint y, uint c) internal {
         require(x < 8 && y < 8);    // Checks if x and y are in bound (board size is 8 * 8)
-        board[x][y] = c;
+        // FIXME may be we should check the bounds for c
+
+        // Erase the value at index, and write the value c
+        // Attention at the conversion to uint256, because number '3' is comprehended as uint8, without it,
+        // the result of the shifting will be overflowed and might be messed up
+        uint index = 2 * ((8 * y) + x);
+        board = (board & (~(uint256(3) << index))) | (c << index);
     }
 }
