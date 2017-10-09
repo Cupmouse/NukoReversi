@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>NukoReversi</title>
+    <script type="application/javascript" src="web3.min.js"></script>
+    <script type="application/javascript" src="bignumber.min.js"></script>
+</head>
+<body>
+<script type="application/javascript">
+    let boardCanvas;
+    abi = [{"constant":false,"inputs":[],"name":"giveUpGame","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"board","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":true,"inputs":[],"name":"turn","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[],"name":"passTurn","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[],"name":"turnOf","outputs":[{"name":"","type":"uint256"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[],"name":"joinGame","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":false,"inputs":[{"name":"x","type":"uint256"},{"name":"y","type":"uint256"}],"name":"placePiece","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"constant":true,"inputs":[{"name":"","type":"uint256"}],"name":"players","outputs":[{"name":"","type":"address"}],"payable":false,"stateMutability":"view","type":"function"},{"inputs":[],"payable":false,"stateMutability":"nonpayable","type":"constructor"}];
+
+    let web3 = new Web3(new Web3.providers.HttpProvider("http://localhost:8293"));
+
+    window.onload = function () {
+        boardCanvas = document.getElementById('canvas_board');
+
+        boardCanvas.addEventListener('click', canvasClicked, false);
+        draw();
+    };
+
+    function canvasClicked(event) {
+        let bound = event.target.getBoundingClientRect();
+        let cx = event.clientX - bound.left;
+        let cy = event.clientY - bound.top;
+
+        if (cx < 10 || cx > 490 || cy < 10 || cy > 490)
+            return;
+
+        console.log("clicked mait" + cx + " " + cy);
+
+        placePiece(Math.floor((cx - 10) / 50), Math.floor((cy - 10) / 50));
+    }
+
+    let board = new Array(8);
+    for (let i = 0; i < 8; i++) {
+        board[i] = (new Array(8)).fill(0);
+    }
+
+    let reversi;
+
+    function draw() {
+        let ctx = boardCanvas.getContext('2d');
+        ctx.clearRect(0, 0, 500, 500);
+        ctx.strokeStyle = 'rgb(0, 0, 0)';
+        ctx.fillStyle = 'rgb(0, 0, 0)';
+
+        for (let y = 0; y < 8; y++) {
+            for (let x = 0; x < 8; x++) {
+                ctx.strokeRect(10 + 50 * x, 10 + 50 * y, 50, 50);
+
+                if (board[x][y] !== 0) {
+                    ctx.beginPath();
+                    ctx.arc(10 + 50 * x + 25, 10 + 50 * y + 25, 20, 0, 2 * Math.PI);
+                    ctx.closePath();
+
+                    if (board[x][y] === 1) {
+                        ctx.fill();
+                    } else {
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+    }
+
+    function getBoard() {
+        reversi.methods.board().call({from: '0x7faa1bcfc52b77b3c672c37898881f222b929dd0'}, function (error, result) {
+            if(!error) {
+                let serialized = new BigNumber(result);
+                let two = new BigNumber(2);
+
+                for (let y = 0; y < 8; y++) {
+                    for (let x = 0; x < 8; x++) {
+                        // Get the piece at (x, y)
+                        board[x][y] = serialized.div(two.pow(2 * ((8 * y) + x))).floor().mod(4).toNumber();
+                    }
+                }
+
+                draw();
+            } else {
+                console.error(error);
+            }
+        });
+    }
+
+    function placePiece(x, y) {
+        console.log('submitted : ' + x + " " + y);
+        reversi.methods.placePiece(x, y).estimateGas({from: '0x7faa1bcfc52b77b3c672c37898881f222b929dd0', gas: '300000'}, function (error, result) {
+            if(!error) {
+                if (result === 300000) {
+                    console.log('Will fail');
+                } else {
+                    reversi.methods.placePiece(x, y).send({from: '0x7faa1bcfc52b77b3c672c37898881f222b929dd0'}, function (error, result) {
+                        if(!error) {
+
+                            console.log('submitted : ' + x + " " + y);
+                            getBoard();
+                        } else {
+                            console.error(error);
+                        }
+                    });
+                }
+            } else {
+                console.error(error);
+            }
+        });
+    }
+
+    function joinGame(contractAddress) {
+        console.log('player chose :'.contractAddress);
+
+        reversi = new web3.eth.Contract(abi, contractAddress);
+
+//        reversi.methods.joinGame().send({from: '0x7faa1bcfc52b77b3c672c37898881f222b929dd0'}, function(error, result) {
+//            if(!error)
+//                console.log(result);
+//            else
+//                console.error(error);
+//        });
+    }
+
+</script>
+<input type="text" id="contract_address_text" value="0x400009c2b5492e9e8cec590a1a4f762e78cc6209" placeholder="Enter the NekoReversi contract address where you want to play on">
+<button onclick='joinGame(document.getElementById("contract_address_text").value)'>じょいん がめ</button>
+<button onclick='draw()'>リロード</button>
+<button onclick='getBoard()'>ぼーでぃ</button>
+
+<canvas id="canvas_board" width="500" height="500"></canvas>
+</body>
+</html>
